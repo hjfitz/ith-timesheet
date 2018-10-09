@@ -66,6 +66,7 @@ function populateDetails({ user }) {
   payroll.textContent = user.payroll;
 
   const now = new Date;
+  now.setDate(dates.value * 7);
   const lastDay = new Date(now.setDate(now.getDate() - now.getDay()+6));
   weekEnding.textContent = lastDay.toLocaleDateString();
 }
@@ -104,8 +105,6 @@ function populateDays(shifts) {
         totalWorked.push(shift.gross);
       });
     }
-
-
 
     // insert in to DOM
     [desc, dayCell, from, to, total].forEach(cell => row.appendChild(cell));
