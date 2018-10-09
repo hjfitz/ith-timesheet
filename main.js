@@ -5,19 +5,46 @@ Date.prototype.getWeek = function() {
     return Math.ceil((((this - onejan) / millisecsInDay) + onejan.getDay()+1)/7);
 };
 
-const info = id => `https://ith.port.ac.uk/public/app/global/php/users/profile.php?id=${id}`; // 242
-const timesheet = id => `https://ith.port.ac.uk/public/app/rota-rebuild/php/myShifts.php?input1=${(new Date().getWeek()) + 25}&token=${id}` // 65; 242
+const userInfo = 'https://ith.port.ac.uk/public/php/personal-message/recipients.php';
+
+const info = id => `https://ith.port.ac.uk/public/app/global/php/users/profile.php?id=${id}`;
+const timesheet = (id, week) => `https://ith.port.ac.uk/public/app/rota-rebuild/php/myShifts.php?input1=${parseInt(week, 10) + 25}&token=${id}`;
 
 const userInput = document.querySelector('.username-input');
+const users = document.getElementById('user-dropdown');
+const dates = document.getElementById('dates');
 const populateButton = document.getElementById('populate');
 
+users.addEventListener('change', getData);
+dates.addEventListener('change', getData);
 const getjson = (...args) => fetch(...args).then(r => r.json());
 
+function h(elem, content) {
+  const newElem = document.createElement(elem);
+  if (content && typeof content !== 'string') newElem.innerHTML = getHTML(content);
+  else newElem.innerHTML = content || '';
+  return newElem;
+}
+
+async function populateSelect() {
+  const usersInfo = await getjson(userInfo);
+  usersInfo.forEach(user => {
+    const opt = h('option', `${user.preferred} ${user.last_name}`);
+    opt.value = user.user_id;
+    users.appendChild(opt);
+  });
+}
+
 async function getData() {
-  const { value } = userInput;
-  const infoUrl = info(value);
-  const shiftUrl = timesheet(value);
+  const id = users.value;
+  const date = dates.value;
+  const infoUrl = info(id);
+  const shiftUrl = timesheet(id, date);
+  console.log('info:', infoUrl);
+  console.log('shift:', shiftUrl);
   const [userinfo, usershifts] = await Promise.all([getjson(infoUrl), getjson(shiftUrl)]);
+  console.log(userinfo);
+  console.log(usershifts);
   const normalShifts = normaliseShifts(usershifts);
   populateDetails(userinfo);
   populateDays(normalShifts);
@@ -43,15 +70,17 @@ function populateDetails({ user }) {
   weekEnding.textContent = lastDay.toLocaleDateString();
 }
 
-const h = (elem, content) => {
-  const newElem = document.createElement(elem);
-  if (content) newElem.textContent = content;
-  return newElem;
+function getHTML(node) {
+  const tempContainer = h('div');
+  tempContainer.appendChild(node);
+  return tempContainer.innerHTML;
 }
 
 function populateDays(shifts) {
+  const totalWorked = [];
   console.log(shifts);
   const body = document.querySelector('tbody');
+  body.innerHTML = '';
   ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].forEach(day => {
     // create new elements
     const row = h('tr');
@@ -63,7 +92,6 @@ function populateDays(shifts) {
 
 
     if (day in shifts) {
-      console.log(shifts[day]);
       shifts[day].forEach(shift => {
         const descS = h('span', `ITH - ${shift.long_name}`);
         const fromS = h('span', shift.start_time);
@@ -73,8 +101,7 @@ function populateDays(shifts) {
         from.appendChild(fromS);
         to.appendChild(toS);
         total.appendChild(totalS);
-        
-        console.log(shift);
+        totalWorked.push(shift.gross);
       });
     }
 
@@ -84,6 +111,37 @@ function populateDays(shifts) {
     [desc, dayCell, from, to, total].forEach(cell => row.appendChild(cell));
     body.appendChild(row);
   });
+  const totalHours = totalWorked.reduce((acc, gross) => {
+    const [hour, minute, seconds] = gross.split(':').map(num => parseInt(num, 10));
+    acc += hour;
+    acc += minute / 60;
+    acc += seconds / (60 * 60);
+    return acc;
+  }, 0).toFixed(2);
+    const row = h('tr');
+    const hours =  h('div', `Total Hours worked: ${totalHours}`);
+    const pay = h('div', `Total Pay: £${~~(totalHours * 8.8)}`);
+    row.appendChild(hours);
+    row.appendChild(pay);
+    body.appendChild(row);
 }
 
-populateButton.addEventListener('click', getData);
+function populateWeeks() {
+  // in to the trash
+  for (let i = 1; i < 52; i++) {
+      const now = new Date(2018, 0, 1);
+      now.setDate(i * 7);
+      const opt = h('option', now.toLocaleDateString());
+      opt.value = i;
+      dates.appendChild(opt);
+  }
+  const nearest = dates.querySelector(`[value='${new Date().getWeek()}']`);
+  dates.selectedIndex = new Date().getWeek() - 1;
+}
+
+function main() {
+  populateWeeks();
+  populateSelect();
+}
+
+window.onload = main;
